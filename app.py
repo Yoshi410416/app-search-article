@@ -5,7 +5,7 @@ import os
 
 load_dotenv()
 
-from models import init_db, get_db
+from models import init_db, get_db, get_cursor
 from scheduler import start_scheduler
 
 app = Flask(__name__)
@@ -13,16 +13,18 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-producti
 
 with app.app_context():
     init_db()
-    db = get_db()
-    existing_admin = db.execute('SELECT * FROM admin').fetchone()
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute('SELECT * FROM admin')
+    existing_admin = c.fetchone()
     if not existing_admin:
         default_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
-        db.execute(
+        c.execute(
             'INSERT INTO admin (username, password_hash) VALUES (?, ?)',
             ('admin', generate_password_hash(default_password))
         )
-        db.commit()
-    db.close()
+        conn.commit()
+    conn.close()
 
 start_scheduler()
 
@@ -39,9 +41,11 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        db = get_db()
-        admin = db.execute('SELECT * FROM admin WHERE username = ?', (username,)).fetchone()
-        db.close()
+        conn = get_db()
+        c = get_cursor(conn)
+        c.execute('SELECT * FROM admin WHERE username = ?', (username,))
+        admin = c.fetchone()
+        conn.close()
         if admin and check_password_hash(admin['password_hash'], password):
             session['admin'] = username
             return redirect(url_for('dashboard'))
@@ -59,10 +63,13 @@ def logout():
 def dashboard():
     if 'admin' not in session:
         return redirect(url_for('login'))
-    db = get_db()
-    keywords = db.execute('SELECT * FROM keywords ORDER BY id').fetchall()
-    recipients = db.execute('SELECT * FROM recipients ORDER BY id').fetchall()
-    db.close()
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute('SELECT * FROM keywords ORDER BY id')
+    keywords = c.fetchall()
+    c.execute('SELECT * FROM recipients ORDER BY id')
+    recipients = c.fetchall()
+    conn.close()
     return render_template('dashboard.html', keywords=keywords, recipients=recipients)
 
 
@@ -72,14 +79,16 @@ def add_keyword():
         return redirect(url_for('login'))
     keyword = request.form.get('keyword', '').strip()
     if keyword:
-        db = get_db()
+        conn = get_db()
+        c = get_cursor(conn)
         try:
-            db.execute('INSERT INTO keywords (keyword) VALUES (?)', (keyword,))
-            db.commit()
+            c.execute('INSERT INTO keywords (keyword) VALUES (?)', (keyword,))
+            conn.commit()
             flash(f'キーワード「{keyword}」を追加しました', 'success')
         except Exception:
+            conn.rollback()
             flash(f'キーワード「{keyword}」はすでに登録されています', 'danger')
-        db.close()
+        conn.close()
     return redirect(url_for('dashboard'))
 
 
@@ -87,10 +96,11 @@ def add_keyword():
 def delete_keyword(id):
     if 'admin' not in session:
         return redirect(url_for('login'))
-    db = get_db()
-    db.execute('DELETE FROM keywords WHERE id = ?', (id,))
-    db.commit()
-    db.close()
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute('DELETE FROM keywords WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
     flash('キーワードを削除しました', 'success')
     return redirect(url_for('dashboard'))
 
@@ -101,14 +111,16 @@ def add_recipient():
         return redirect(url_for('login'))
     email = request.form.get('email', '').strip()
     if email:
-        db = get_db()
+        conn = get_db()
+        c = get_cursor(conn)
         try:
-            db.execute('INSERT INTO recipients (email) VALUES (?)', (email,))
-            db.commit()
+            c.execute('INSERT INTO recipients (email) VALUES (?)', (email,))
+            conn.commit()
             flash(f'メールアドレス「{email}」を追加しました', 'success')
         except Exception:
+            conn.rollback()
             flash(f'メールアドレス「{email}」はすでに登録されています', 'danger')
-        db.close()
+        conn.close()
     return redirect(url_for('dashboard'))
 
 
@@ -116,10 +128,11 @@ def add_recipient():
 def delete_recipient(id):
     if 'admin' not in session:
         return redirect(url_for('login'))
-    db = get_db()
-    db.execute('DELETE FROM recipients WHERE id = ?', (id,))
-    db.commit()
-    db.close()
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute('DELETE FROM recipients WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
     flash('メールアドレスを削除しました', 'success')
     return redirect(url_for('dashboard'))
 

@@ -4,11 +4,11 @@ from email.mime.multipart import MIMEMultipart
 import os
 
 def send_news_email(recipients, articles_by_keyword):
-    gmail_user = os.environ.get('GMAIL_USER')
-    gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
+    gmail_user = os.environ.get('MAIL_USER')
+    gmail_password = os.environ.get('MAIL_PASSWORD')
 
     if not gmail_user or not gmail_password:
-        raise ValueError('GMAIL_USER と GMAIL_APP_PASSWORD を .env に設定してください')
+        raise ValueError('MAIL_USER と MAIL_PASSWORD を .env に設定してください')
 
     body = '本日のニュース配信をお届けします。\n\n'
     has_articles = False
@@ -33,7 +33,8 @@ def send_news_email(recipients, articles_by_keyword):
     msg['Subject'] = '【ニュース自動配信】本日のニュース'
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+    with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
+        smtp.starttls()
         smtp.login(gmail_user, gmail_password)
         smtp.sendmail(gmail_user, recipients, msg.as_string())
 

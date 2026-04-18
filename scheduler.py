@@ -3,14 +3,16 @@ from apscheduler.triggers.cron import CronTrigger
 import pytz
 
 def run_daily_job():
-    from models import get_db
+    from models import get_db, get_cursor
     from scraper import collect_articles
     from mailer import send_news_email
-
-    db = get_db()
-    keywords = [row['keyword'] for row in db.execute('SELECT keyword FROM keywords').fetchall()]
-    recipients = [row['email'] for row in db.execute('SELECT email FROM recipients').fetchall()]
-    db.close()
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute('SELECT keyword FROM keywords')
+    keywords = [row['keyword'] for row in c.fetchall()]
+    c.execute('SELECT email FROM recipients')
+    recipients = [row['email'] for row in c.fetchall()]
+    conn.close()
 
     if not recipients:
         print('[scheduler] 配信先メールアドレスが未登録のためスキップ')
