@@ -19,8 +19,16 @@ def send_news_email(recipients, articles_by_keyword):
         body += f'━━━━━━━━━━━━━━━━━━━━\n'
         if articles:
             has_articles = True
-            for article in articles:
-                body += f'・{article["title"]}\n  {article["url"]}\n\n'
+            sorted_articles = sorted(articles, key=lambda x: x.get('view_count', 0), reverse=True)
+            for article in sorted_articles:
+                vc = article.get('view_count', 0)
+                if vc >= 10000:
+                    vc_str = f' [{vc / 10000:.1f}万件]'
+                elif vc > 0:
+                    vc_str = f' [{vc}件]'
+                else:
+                    vc_str = ''
+                body += f'・{article["title"]}{vc_str}\n  {article["url"]}\n\n'
         else:
             body += '該当記事なし\n\n'
 

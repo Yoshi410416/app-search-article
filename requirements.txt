@@ -6,3 +6,4 @@ python-dotenv
 werkzeug
 pytz
 gunicorn
+psycopg2-binary

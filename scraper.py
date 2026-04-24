@@ -66,6 +66,30 @@ def _find_time_from_link(link):
             return parse_article_time(time_tag)
     return None
 
+_VIEW_COUNT_RE = re.compile(r'([\d,]+(?:\.\d+)?万?)\s*件')
+
+def _parse_view_count(raw):
+    raw = raw.replace(',', '')
+    if '万' in raw:
+        try:
+            return int(float(raw.replace('万', '')) * 10000)
+        except:
+            return 0
+    try:
+        return int(raw)
+    except:
+        return 0
+
+def _find_view_count_from_link(link):
+    for ancestor in link.parents:
+        if ancestor.name in ['body', 'html']:
+            break
+        for text_node in ancestor.find_all(string=_VIEW_COUNT_RE):
+            m = _VIEW_COUNT_RE.search(text_node)
+            if m:
+                return _parse_view_count(m.group(1))
+    return 0
+
 def scrape_yahoo_news(keyword):
     url = f'https://news.yahoo.co.jp/search?p={keyword}&ei=UTF-8'
     articles = []
@@ -86,7 +110,8 @@ def scrape_yahoo_news(keyword):
                     if article_time and not (start_dt <= article_time <= end_dt):
                         continue
                     full_url = href if href.startswith('http') else f'https://news.yahoo.co.jp{href}'
-                    articles.append({'title': title, 'url': full_url, 'source': 'Yahoo ニュース'})
+                    view_count = _find_view_count_from_link(link)
+                    articles.append({'title': title, 'url': full_url, 'source': 'Yahoo ニュース', 'view_count': view_count})
                     seen.add(href)
     except Exception as e:
         print(f'[scraper] Yahoo: {keyword} の取得中にエラー: {e}')
@@ -201,6 +226,12 @@ def scrape_nikkei_news(keyword):
         print(f'[scraper] 日経: {keyword} の取得中にエラー: {e}')
     return articles
 
+def _title_matches_keyword(title, keyword):
+    # キーワードをスペースで分割し、いずれかの単語がタイトルに含まれれば一致とみなす
+    words = keyword.split()
+    title_lower = title.lower()
+    return any(word.lower() in title_lower for word in words)
+
 def collect_articles(keywords):
     all_articles = {}
     for keyword in keywords:
@@ -213,5 +244,8 @@ def collect_articles(keywords):
         time.sleep(1)
         articles += scrape_nikkei_news(keyword)
         time.sleep(1)
-        all_articles[keyword] = articles
+
+        # タイトルにキーワードが含まれない記事を除外
+        filtered = [a for a in articles if _title_matches_keyword(a['title'], keyword)]
+        all_articles[keyword] = filtered
     return all_articles

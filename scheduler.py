@@ -2,6 +2,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 
+_scheduler = None
+
 def run_daily_job():
     from models import get_db, get_cursor
     from scraper import collect_articles
@@ -23,9 +25,19 @@ def run_daily_job():
     print('[scheduler] 配信完了')
 
 def start_scheduler():
+    global _scheduler
+    from models import get_delivery_time
+    hour, minute = get_delivery_time()
     tz = pytz.timezone('Asia/Tokyo')
-    scheduler = BackgroundScheduler(timezone=tz)
-    scheduler.add_job(run_daily_job, CronTrigger(hour=8, minute=0, timezone=tz))
-    scheduler.start()
-    print('[scheduler] スケジューラ起動（毎朝8時に配信）')
-    return scheduler
+    _scheduler = BackgroundScheduler(timezone=tz)
+    _scheduler.add_job(run_daily_job, CronTrigger(hour=hour, minute=minute, timezone=tz), id='daily_job')
+    _scheduler.start()
+    print(f'[scheduler] スケジューラ起動（毎日 {hour:02d}:{minute:02d} に配信）')
+    return _scheduler
+
+def reschedule(hour, minute):
+    global _scheduler
+    if _scheduler:
+        tz = pytz.timezone('Asia/Tokyo')
+        _scheduler.reschedule_job('daily_job', trigger=CronTrigger(hour=hour, minute=minute, timezone=tz))
+        print(f'[scheduler] 配信時間を {hour:02d}:{minute:02d} に変更')

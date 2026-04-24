@@ -5,7 +5,7 @@ import os
 
 load_dotenv()
 
-from models import init_db, get_db, get_cursor
+from models import init_db, get_db, get_cursor, get_delivery_time, set_delivery_time
 from scheduler import start_scheduler
 
 app = Flask(__name__)
@@ -20,7 +20,7 @@ with app.app_context():
     if not existing_admin:
         default_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
         c.execute(
-            'INSERT INTO admin (username, password_hash) VALUES (?, ?)',
+            'INSERT INTO admin (username, password_hash) VALUES (%s, %s)',
             ('admin', generate_password_hash(default_password))
         )
         conn.commit()
@@ -43,7 +43,7 @@ def login():
         password = request.form['password']
         conn = get_db()
         c = get_cursor(conn)
-        c.execute('SELECT * FROM admin WHERE username = ?', (username,))
+        c.execute('SELECT * FROM admin WHERE username = %s', (username,))
         admin = c.fetchone()
         conn.close()
         if admin and check_password_hash(admin['password_hash'], password):
@@ -70,7 +70,14 @@ def dashboard():
     c.execute('SELECT * FROM recipients ORDER BY id')
     recipients = c.fetchall()
     conn.close()
-    return render_template('dashboard.html', keywords=keywords, recipients=recipients)
+    delivery_hour, delivery_minute = get_delivery_time()
+    return render_template(
+        'dashboard.html',
+        keywords=keywords,
+        recipients=recipients,
+        delivery_hour=delivery_hour,
+        delivery_minute=delivery_minute,
+    )
 
 
 @app.route('/keywords/add', methods=['POST'])
@@ -82,7 +89,7 @@ def add_keyword():
         conn = get_db()
         c = get_cursor(conn)
         try:
-            c.execute('INSERT INTO keywords (keyword) VALUES (?)', (keyword,))
+            c.execute('INSERT INTO keywords (keyword) VALUES (%s)', (keyword,))
             conn.commit()
             flash(f'キーワード「{keyword}」を追加しました', 'success')
         except Exception:
@@ -98,7 +105,7 @@ def delete_keyword(id):
         return redirect(url_for('login'))
     conn = get_db()
     c = get_cursor(conn)
-    c.execute('DELETE FROM keywords WHERE id = ?', (id,))
+    c.execute('DELETE FROM keywords WHERE id = %s', (id,))
     conn.commit()
     conn.close()
     flash('キーワードを削除しました', 'success')
@@ -114,7 +121,7 @@ def add_recipient():
         conn = get_db()
         c = get_cursor(conn)
         try:
-            c.execute('INSERT INTO recipients (email) VALUES (?)', (email,))
+            c.execute('INSERT INTO recipients (email) VALUES (%s)', (email,))
             conn.commit()
             flash(f'メールアドレス「{email}」を追加しました', 'success')
         except Exception:
@@ -130,10 +137,30 @@ def delete_recipient(id):
         return redirect(url_for('login'))
     conn = get_db()
     c = get_cursor(conn)
-    c.execute('DELETE FROM recipients WHERE id = ?', (id,))
+    c.execute('DELETE FROM recipients WHERE id = %s', (id,))
     conn.commit()
     conn.close()
     flash('メールアドレスを削除しました', 'success')
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/settings/delivery-time', methods=['POST'])
+def update_delivery_time():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+    try:
+        hour = int(request.form.get('hour', 8))
+        minute = int(request.form.get('minute', 0))
+    except ValueError:
+        flash('無効な時間が入力されました', 'danger')
+        return redirect(url_for('dashboard'))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        flash('時間は0〜23、分は0〜59の範囲で入力してください', 'danger')
+        return redirect(url_for('dashboard'))
+    set_delivery_time(hour, minute)
+    from scheduler import reschedule
+    reschedule(hour, minute)
+    flash(f'配信時間を {hour:02d}:{minute:02d} に変更しました', 'success')
     return redirect(url_for('dashboard'))
 
 
