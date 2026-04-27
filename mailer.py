@@ -3,12 +3,15 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 
-def send_news_email(recipients, articles_by_keyword):
+def send_news_email(recipients, articles_by_keyword, jnet21_articles=None):
     gmail_user = os.environ.get('MAIL_USER')
     gmail_password = os.environ.get('MAIL_PASSWORD')
 
     if not gmail_user or not gmail_password:
         raise ValueError('MAIL_USER と MAIL_PASSWORD を .env に設定してください')
+
+    from datetime import datetime, timedelta
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y年%m月%d日')
 
     body = '本日のニュース配信をお届けします。\n\n'
     has_articles = False
@@ -33,7 +36,16 @@ def send_news_email(recipients, articles_by_keyword):
             body += '該当記事なし\n\n'
 
     if not has_articles:
-        body = '本日は全てのキーワードで該当記事がありませんでした。\n'
+        body = '本日は全てのキーワードで該当記事がありませんでした。\n\n'
+
+    body += f'━━━━━━━━━━━━━━━━━━━━\n'
+    body += f'■ J-Net21 新着情報（{yesterday}分）\n'
+    body += f'━━━━━━━━━━━━━━━━━━━━\n'
+    if jnet21_articles:
+        for article in jnet21_articles:
+            body += f'・{article["title"]}\n  {article["url"]}\n\n'
+    else:
+        body += '前日の新着情報はありませんでした。\n\n'
 
     msg = MIMEMultipart()
     msg['From'] = gmail_user

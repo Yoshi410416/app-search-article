@@ -226,6 +226,61 @@ def scrape_nikkei_news(keyword):
         print(f'[scraper] 日経: {keyword} の取得中にエラー: {e}')
     return articles
 
+def get_jnet21_time_range():
+    now = datetime.now()
+    yesterday = now - timedelta(days=1)
+    start_dt = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_dt = now.replace(hour=23, minute=59, second=59, microsecond=0)
+    return start_dt, end_dt
+
+def collect_jnet21_articles():
+    feeds = [
+        'https://j-net21.smrj.go.jp/snavi/support/support.xml',
+        'https://j-net21.smrj.go.jp/snavi/public/public.xml',
+        'https://j-net21.smrj.go.jp/snavi/event/event.xml',
+    ]
+    DC_DATE = '{http://purl.org/dc/elements/1.1/}date'
+    articles = []
+    start_dt, end_dt = get_jnet21_time_range()
+    seen = set()
+
+    for feed_url in feeds:
+        try:
+            response = requests.get(feed_url, headers=HEADERS, timeout=10)
+            response.raise_for_status()
+            root = ET.fromstring(response.content)
+
+            for item in root.findall('.//item'):
+                title_el = item.find('title')
+                link_el = item.find('link')
+                date_el = item.find(DC_DATE)
+
+                title = title_el.text if title_el is not None else ''
+                link = link_el.text if link_el is not None else ''
+                if not title or not link or link in seen:
+                    continue
+
+                full_url = link if link.startswith('http') else f'https://j-net21.smrj.go.jp/{link}'
+
+                article_time = None
+                if date_el is not None and date_el.text:
+                    try:
+                        dt = datetime.fromisoformat(date_el.text)
+                        article_time = datetime.utcfromtimestamp(dt.timestamp()) + timedelta(hours=9)
+                    except Exception:
+                        pass
+
+                if article_time and not (start_dt <= article_time <= end_dt):
+                    continue
+
+                articles.append({'title': title, 'url': full_url, 'source': 'J-Net21'})
+                seen.add(link)
+        except Exception as e:
+            print(f'[scraper] J-Net21: 取得中にエラー ({feed_url}): {e}')
+
+    return articles
+
+
 def _title_matches_keyword(title, keyword):
     # キーワードをスペースで分割し、いずれかの単語がタイトルに含まれれば一致とみなす
     words = keyword.split()

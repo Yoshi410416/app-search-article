@@ -6,7 +6,7 @@ _scheduler = None
 
 def run_daily_job():
     from models import get_db, get_cursor
-    from scraper import collect_articles
+    from scraper import collect_articles, collect_jnet21_articles
     from mailer import send_news_email
     conn = get_db()
     c = get_cursor(conn)
@@ -21,7 +21,8 @@ def run_daily_job():
         return
 
     articles = collect_articles(keywords)
-    send_news_email(recipients, articles)
+    jnet21_articles = collect_jnet21_articles()
+    send_news_email(recipients, articles, jnet21_articles)
     print('[scheduler] 配信完了')
 
 def start_scheduler():
