@@ -39,6 +39,10 @@ def init_db():
         )
     ''')
     c.execute('''
+        ALTER TABLE settings
+        ADD COLUMN IF NOT EXISTS jnet21_last_article_id INTEGER NOT NULL DEFAULT 0
+    ''')
+    c.execute('''
         INSERT INTO settings (id, delivery_hour, delivery_minute)
         VALUES (1, 8, 0)
         ON CONFLICT (id) DO NOTHING
@@ -64,6 +68,26 @@ def set_delivery_time(hour, minute):
     c.execute(
         'UPDATE settings SET delivery_hour = %s, delivery_minute = %s WHERE id = 1',
         (hour, minute)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_jnet21_last_id():
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute('SELECT jnet21_last_article_id FROM settings WHERE id = 1')
+    row = c.fetchone()
+    conn.close()
+    return row['jnet21_last_article_id'] if row else 0
+
+
+def set_jnet21_last_id(article_id):
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute(
+        'UPDATE settings SET jnet21_last_article_id = %s WHERE id = 1',
+        (article_id,)
     )
     conn.commit()
     conn.close()

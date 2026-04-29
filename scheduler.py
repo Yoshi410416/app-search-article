@@ -21,7 +21,15 @@ def run_daily_job():
         return
 
     articles = collect_articles(keywords)
-    jnet21_articles = collect_jnet21_articles()
+
+    from models import get_jnet21_last_id, set_jnet21_last_id
+    from scraper import _extract_jnet21_article_id
+    last_id = get_jnet21_last_id()
+    jnet21_articles = collect_jnet21_articles(last_id=last_id)
+    if jnet21_articles:
+        new_max_id = max(_extract_jnet21_article_id(a['url']) for a in jnet21_articles)
+        set_jnet21_last_id(new_max_id)
+
     send_news_email(recipients, articles, jnet21_articles)
     print('[scheduler] 配信完了')
 

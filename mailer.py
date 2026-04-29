@@ -31,7 +31,7 @@ def send_news_email(recipients, articles_by_keyword, jnet21_articles=None):
                     vc_str = f' [{vc}件]'
                 else:
                     vc_str = ''
-                body += f'・{article["title"]}{vc_str}\n  {article["url"]}\n\n'
+                body += f'・{article["title"]}{vc_str}\n{article["url"]}\n\n'
         else:
             body += '該当記事なし\n\n'
 
@@ -39,11 +39,11 @@ def send_news_email(recipients, articles_by_keyword, jnet21_articles=None):
         body = '本日は全てのキーワードで該当記事がありませんでした。\n\n'
 
     body += f'━━━━━━━━━━━━━━━━━━━━\n'
-    body += f'■ J-Net21 新着情報（{yesterday}分）\n'
+    body += f'■ J-Net21（大阪府）の補助金　新着情報（{yesterday}分）\n'
     body += f'━━━━━━━━━━━━━━━━━━━━\n'
     if jnet21_articles:
         for article in jnet21_articles:
-            body += f'・{article["title"]}\n  {article["url"]}\n\n'
+            body += f'・{article["title"]}\n{article["url"]}\n\n'
     else:
         body += '前日の新着情報はありませんでした。\n\n'
 

@@ -233,7 +233,24 @@ def get_jnet21_time_range():
     end_dt = now.replace(hour=23, minute=59, second=59, microsecond=0)
     return start_dt, end_dt
 
-def collect_jnet21_articles():
+JNET21_ALLOWED_REGIONS = {'全国', '大阪府'}
+
+DC_COVERAGE = '{http://purl.org/dc/elements/1.1/}coverage'
+RDF_LABEL   = '{http://www.w3.org/1999/02/22-rdf-syntax-ns#}label'
+
+def _get_jnet21_regions(item):
+    regions = set()
+    for cov in item.findall(DC_COVERAGE):
+        label_el = cov.find(RDF_LABEL)
+        if label_el is not None and label_el.text:
+            regions.add(label_el.text.strip())
+    return regions
+
+def _extract_jnet21_article_id(url):
+    m = re.search(r'/articles/(\d+)', url)
+    return int(m.group(1)) if m else 0
+
+def collect_jnet21_articles(last_id=0):
     feeds = [
         'https://j-net21.smrj.go.jp/snavi/support/support.xml',
         'https://j-net21.smrj.go.jp/snavi/public/public.xml',
@@ -260,7 +277,14 @@ def collect_jnet21_articles():
                 if not title or not link or link in seen:
                     continue
 
+                regions = _get_jnet21_regions(item)
+                if not regions & JNET21_ALLOWED_REGIONS:
+                    continue
+
                 full_url = link if link.startswith('http') else f'https://j-net21.smrj.go.jp/{link}'
+
+                if _extract_jnet21_article_id(full_url) <= last_id:
+                    continue
 
                 article_time = None
                 if date_el is not None and date_el.text:
