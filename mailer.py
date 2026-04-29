@@ -1,14 +1,13 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import os
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 def send_news_email(recipients, articles_by_keyword, jnet21_articles=None):
-    gmail_user = os.environ.get('MAIL_USER')
-    gmail_password = os.environ.get('MAIL_PASSWORD')
+    api_key = os.environ.get('SENDGRID_API_KEY')
+    mail_from = os.environ.get('MAIL_FROM')
 
-    if not gmail_user or not gmail_password:
-        raise ValueError('MAIL_USER と MAIL_PASSWORD を .env に設定してください')
+    if not api_key or not mail_from:
+        raise ValueError('SENDGRID_API_KEY と MAIL_FROM を環境変数に設定してください')
 
     from datetime import datetime, timedelta
     yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y年%m月%d日')
@@ -47,15 +46,14 @@ def send_news_email(recipients, articles_by_keyword, jnet21_articles=None):
     else:
         body += '前日の新着情報はありませんでした。\n\n'
 
-    msg = MIMEMultipart()
-    msg['From'] = gmail_user
-    msg['To'] = ', '.join(recipients)
-    msg['Subject'] = '【ニュース自動配信】本日のニュース'
-    msg.attach(MIMEText(body, 'plain', 'utf-8'))
-
-    with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
-        smtp.starttls()
-        smtp.login(gmail_user, gmail_password)
-        smtp.sendmail(gmail_user, recipients, msg.as_string())
+    sg = SendGridAPIClient(api_key)
+    for recipient in recipients:
+        message = Mail(
+            from_email=mail_from,
+            to_emails=recipient,
+            subject='【ニュース自動配信】本日のニュース',
+            plain_text_content=body,
+        )
+        sg.send(message)
 
     print(f'[mailer] {len(recipients)}件のアドレスへ送信完了')
