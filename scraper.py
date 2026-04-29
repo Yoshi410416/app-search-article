@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
-import time
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
@@ -311,20 +311,28 @@ def _title_matches_keyword(title, keyword):
     title_lower = title.lower()
     return any(word.lower() in title_lower for word in words)
 
+def _scrape_keyword(keyword):
+    scrapers = [scrape_yahoo_news, scrape_google_news, scrape_nhk_news, scrape_nikkei_news]
+    articles = []
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(fn, keyword) for fn in scrapers]
+        for future in as_completed(futures):
+            try:
+                articles += future.result()
+            except Exception:
+                pass
+    filtered = [a for a in articles if _title_matches_keyword(a['title'], keyword)]
+    return keyword, filtered
+
 def collect_articles(keywords):
     all_articles = {}
-    for keyword in keywords:
-        articles = []
-        articles += scrape_yahoo_news(keyword)
-        time.sleep(1)
-        articles += scrape_google_news(keyword)
-        time.sleep(1)
-        articles += scrape_nhk_news(keyword)
-        time.sleep(1)
-        articles += scrape_nikkei_news(keyword)
-        time.sleep(1)
-
-        # タイトルにキーワードが含まれない記事を除外
-        filtered = [a for a in articles if _title_matches_keyword(a['title'], keyword)]
-        all_articles[keyword] = filtered
+    max_workers = min(len(keywords), 4) if keywords else 1
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_scrape_keyword, kw) for kw in keywords]
+        for future in as_completed(futures):
+            try:
+                keyword, articles = future.result()
+                all_articles[keyword] = articles
+            except Exception as e:
+                print(f'[scraper] キーワード収集エラー: {e}')
     return all_articles

@@ -34,41 +34,14 @@ def init_db():
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY DEFAULT 1,
-            delivery_hour INTEGER NOT NULL DEFAULT 8,
-            delivery_minute INTEGER NOT NULL DEFAULT 0
+            jnet21_last_article_id INTEGER NOT NULL DEFAULT 0
         )
     ''')
     c.execute('''
-        ALTER TABLE settings
-        ADD COLUMN IF NOT EXISTS jnet21_last_article_id INTEGER NOT NULL DEFAULT 0
-    ''')
-    c.execute('''
-        INSERT INTO settings (id, delivery_hour, delivery_minute)
-        VALUES (1, 8, 0)
+        INSERT INTO settings (id, jnet21_last_article_id)
+        VALUES (1, 0)
         ON CONFLICT (id) DO NOTHING
     ''')
-    conn.commit()
-    conn.close()
-
-
-def get_delivery_time():
-    conn = get_db()
-    c = get_cursor(conn)
-    c.execute('SELECT delivery_hour, delivery_minute FROM settings WHERE id = 1')
-    row = c.fetchone()
-    conn.close()
-    if row:
-        return row['delivery_hour'], row['delivery_minute']
-    return 8, 0
-
-
-def set_delivery_time(hour, minute):
-    conn = get_db()
-    c = get_cursor(conn)
-    c.execute(
-        'UPDATE settings SET delivery_hour = %s, delivery_minute = %s WHERE id = 1',
-        (hour, minute)
-    )
     conn.commit()
     conn.close()
 

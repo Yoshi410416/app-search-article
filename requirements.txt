@@ -1,9 +1,7 @@
 flask
 requests
 beautifulsoup4
-apscheduler
 python-dotenv
 werkzeug
-pytz
 gunicorn
 psycopg2-binary

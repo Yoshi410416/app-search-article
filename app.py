@@ -2,11 +2,11 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import os
+import threading
 
 load_dotenv()
 
-from models import init_db, get_db, get_cursor, get_delivery_time, set_delivery_time
-from scheduler import start_scheduler
+from models import init_db, get_db, get_cursor
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -25,8 +25,6 @@ with app.app_context():
         )
         conn.commit()
     conn.close()
-
-start_scheduler()
 
 
 @app.route('/')
@@ -70,13 +68,10 @@ def dashboard():
     c.execute('SELECT * FROM recipients ORDER BY id')
     recipients = c.fetchall()
     conn.close()
-    delivery_hour, delivery_minute = get_delivery_time()
     return render_template(
         'dashboard.html',
         keywords=keywords,
         recipients=recipients,
-        delivery_hour=delivery_hour,
-        delivery_minute=delivery_minute,
     )
 
 
@@ -144,36 +139,21 @@ def delete_recipient(id):
     return redirect(url_for('dashboard'))
 
 
-@app.route('/settings/delivery-time', methods=['POST'])
-def update_delivery_time():
+@app.route('/send-now', methods=['POST'])
+def send_now():
     if 'admin' not in session:
         return redirect(url_for('login'))
-    try:
-        hour = int(request.form.get('hour', 8))
-        minute = int(request.form.get('minute', 0))
-    except ValueError:
-        flash('無効な時間が入力されました', 'danger')
-        return redirect(url_for('dashboard'))
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        flash('時間は0〜23、分は0〜59の範囲で入力してください', 'danger')
-        return redirect(url_for('dashboard'))
-    set_delivery_time(hour, minute)
-    from scheduler import reschedule
-    reschedule(hour, minute)
-    flash(f'配信時間を {hour:02d}:{minute:02d} に変更しました', 'success')
-    return redirect(url_for('dashboard'))
 
+    def _run():
+        try:
+            from scheduler import run_daily_job
+            run_daily_job()
+        except Exception as e:
+            print(f'[send_now] 配信エラー: {e}')
 
-@app.route('/send-test', methods=['POST'])
-def send_test():
-    if 'admin' not in session:
-        return redirect(url_for('login'))
-    from scheduler import run_daily_job
-    try:
-        run_daily_job()
-        flash('テストメールを送信しました', 'success')
-    except Exception as e:
-        flash(f'送信エラー：{e}', 'danger')
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    flash('配信を開始しました。数分後にメールをご確認ください。', 'success')
     return redirect(url_for('dashboard'))
 
 
