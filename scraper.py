@@ -1,10 +1,17 @@
 import requests
 from bs4 import BeautifulSoup
 import re
+import difflib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
+
+EXCLUSION_KEYWORDS = [
+    '芸能', 'タレント', '俳優', '女優', 'アイドル', '歌手',
+    '結婚', '離婚', '熱愛', 'スキャンダル',
+    'スポーツ', '野球', 'サッカー', 'ゴルフ',
+]
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -118,7 +125,7 @@ def scrape_yahoo_news(keyword):
     return articles
 
 def scrape_google_news(keyword):
-    url = f'https://news.google.com/rss/search?q={keyword}&hl=ja&gl=JP&ceid=JP:ja'
+    url = f'https://news.google.com/rss/search?q={keyword}&hl=ja&gl=JP&ceid=JP:ja&topic=B'
     articles = []
     start_dt, end_dt = get_time_range()
 
@@ -154,51 +161,6 @@ def scrape_google_news(keyword):
         print(f'[scraper] Google: {keyword} の取得中にエラー: {e}')
     return articles
 
-def parse_nhk_title_time(title):
-    # 例：「記事タイトル4月18日午後2時09分」→ datetime と 本文タイトル を返す
-    m = re.search(r'(\d+)月(\d+)日(午前|午後)(\d+)時(\d+)?分?$', title)
-    if m:
-        now = datetime.now()
-        month, day = int(m.group(1)), int(m.group(2))
-        hour = int(m.group(4))
-        minute = int(m.group(5)) if m.group(5) else 0
-        if m.group(3) == '午後' and hour != 12:
-            hour += 12
-        elif m.group(3) == '午前' and hour == 12:
-            hour = 0
-        try:
-            article_time = datetime(now.year, month, day, hour, minute)
-            clean_title = title[:m.start()].strip()
-            return article_time, clean_title
-        except:
-            pass
-    return None, title
-
-def scrape_nhk_news(keyword):
-    url = f'https://www3.nhk.or.jp/news/search/?word={keyword}'
-    articles = []
-    start_dt, end_dt = get_time_range()
-
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        seen = set()
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '')
-            if '/newsweb/na/' in href:
-                raw_title = link.get_text(strip=True)
-                if len(raw_title) > 10 and href not in seen:
-                    article_time, title = parse_nhk_title_time(raw_title)
-                    if article_time and not (start_dt <= article_time <= end_dt):
-                        continue
-                    full_url = href if href.startswith('http') else f'https://news.web.nhk{href}'
-                    articles.append({'title': title, 'url': full_url, 'source': 'NHK ニュース'})
-                    seen.add(href)
-    except Exception as e:
-        print(f'[scraper] NHK: {keyword} の取得中にエラー: {e}')
-    return articles
 
 def scrape_nikkei_news(keyword):
     url = f'https://www.nikkei.com/search?keyword={keyword}'
@@ -306,23 +268,40 @@ def collect_jnet21_articles(last_id=0):
 
 
 def _title_matches_keyword(title, keyword):
-    # キーワードをスペースで分割し、いずれかの単語がタイトルに含まれれば一致とみなす
     words = keyword.split()
     title_lower = title.lower()
     return any(word.lower() in title_lower for word in words)
 
+def _is_excluded(title):
+    return any(kw in title for kw in EXCLUSION_KEYWORDS)
+
+def _deduplicate_by_title(articles, threshold=0.8):
+    unique = []
+    for article in articles:
+        title = article['title']
+        is_similar = any(
+            difflib.SequenceMatcher(None, title, u['title']).ratio() >= threshold
+            for u in unique
+        )
+        if not is_similar:
+            unique.append(article)
+    return unique
+
 def _scrape_keyword(keyword):
-    scrapers = [scrape_yahoo_news, scrape_google_news, scrape_nhk_news, scrape_nikkei_news]
+    scrapers = [scrape_yahoo_news, scrape_google_news, scrape_nikkei_news]
     articles = []
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         futures = [executor.submit(fn, keyword) for fn in scrapers]
         for future in as_completed(futures):
             try:
                 articles += future.result()
             except Exception:
                 pass
-    filtered = [a for a in articles if _title_matches_keyword(a['title'], keyword)]
-    return keyword, filtered
+    filtered = [
+        a for a in articles
+        if _title_matches_keyword(a['title'], keyword) and not _is_excluded(a['title'])
+    ]
+    return keyword, _deduplicate_by_title(filtered)
 
 def collect_articles(keywords):
     all_articles = {}

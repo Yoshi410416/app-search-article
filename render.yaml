@@ -9,9 +9,9 @@ services:
         generateValue: true
       - key: ADMIN_PASSWORD
         sync: false
-      - key: MAIL_USER
+      - key: SENDGRID_API_KEY
         sync: false
-      - key: MAIL_PASSWORD
+      - key: MAIL_FROM
         sync: false
       - key: DATABASE_URL
         sync: false
