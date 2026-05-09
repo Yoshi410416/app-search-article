@@ -42,6 +42,13 @@ def init_db():
         VALUES (1, 0)
         ON CONFLICT (id) DO NOTHING
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS sent_articles (
+            id SERIAL PRIMARY KEY,
+            url TEXT NOT NULL UNIQUE,
+            sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -61,6 +68,39 @@ def set_jnet21_last_id(article_id):
     c.execute(
         'UPDATE settings SET jnet21_last_article_id = %s WHERE id = 1',
         (article_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_sent_urls():
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute('SELECT url FROM sent_articles')
+    urls = {row['url'] for row in c.fetchall()}
+    conn.close()
+    return urls
+
+
+def record_sent_articles(articles_by_keyword):
+    conn = get_db()
+    c = get_cursor(conn)
+    for articles in articles_by_keyword.values():
+        for article in articles:
+            c.execute(
+                'INSERT INTO sent_articles (url) VALUES (%s) ON CONFLICT (url) DO NOTHING',
+                (article['url'],)
+            )
+    conn.commit()
+    conn.close()
+
+
+def cleanup_old_sent_articles(days=30):
+    conn = get_db()
+    c = get_cursor(conn)
+    c.execute(
+        'DELETE FROM sent_articles WHERE sent_at < NOW() - INTERVAL \'%s days\'',
+        (days,)
     )
     conn.commit()
     conn.close()

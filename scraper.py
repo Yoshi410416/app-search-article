@@ -275,7 +275,7 @@ def _title_matches_keyword(title, keyword):
 def _is_excluded(title):
     return any(kw in title for kw in EXCLUSION_KEYWORDS)
 
-def _deduplicate_by_title(articles, threshold=0.75):
+def _deduplicate_by_title(articles, threshold=0.50):
     unique = []
     for article in articles:
         title = article['title']
