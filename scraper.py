@@ -4,8 +4,10 @@ import re
 import difflib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+
+JST = timezone(timedelta(hours=9))
 
 EXCLUSION_KEYWORDS = [
     '芸能', 'タレント', '俳優', '女優', 'アイドル', '歌手',
@@ -22,7 +24,7 @@ HEADERS = {
 }
 
 def get_time_range():
-    now = datetime.now()
+    now = datetime.now(JST).replace(tzinfo=None)
     end_dt = now.replace(hour=7, minute=0, second=0, microsecond=0)
     start_dt = (now - timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
     return start_dt, end_dt
@@ -37,7 +39,7 @@ def parse_article_time(time_tag):
             pass
 
     text = time_tag.get_text(strip=True)
-    now = datetime.now()
+    now = datetime.now(JST).replace(tzinfo=None)
 
     # 例：4/18(土) 14:10
     m = re.match(r'(\d+)/(\d+)[^\ ]* (\d+):(\d+)', text)
@@ -189,7 +191,7 @@ def scrape_nikkei_news(keyword):
     return articles
 
 def get_jnet21_time_range():
-    now = datetime.now()
+    now = datetime.now(JST).replace(tzinfo=None)
     yesterday = now - timedelta(days=1)
     start_dt = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
     end_dt = now.replace(hour=23, minute=59, second=59, microsecond=0)
